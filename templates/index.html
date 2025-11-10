@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Grace's Emotion Detector</title>
+    <style>
+        :root {
+            --bg: #0f0f0f;
+            --card: #1a1a1a;
+            --text: #e0e0e0;
+            --accent: #ff4757;     /* Vibrant red */
+            --accent-glow: #ff6b7a;
+            --success: #2ed573;
+            --input: #2d2d2d;
+            --border: #333;
+        }
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+            background: radial-gradient(circle at top left, #1a1a2e, var(--bg));
+        }
+        .container {
+            max-width: 620px;
+            margin: 30px auto;
+            background: var(--card);
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 
+                0 10px 30px rgba(0,0,0,0.6),
+                0 0 20px rgba(255,71,87,0.15);
+            border: 1px solid var(--accent);
+            position: relative;
+            overflow: hidden;
+        }
+        .container::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, var(--accent), var(--accent-glow));
+        }
+        h1 {
+            text-align: center;
+            color: var(--accent);
+            font-size: 2.4em;
+            margin: 0 0 8px;
+            text-shadow: 0 0 15px rgba(255,71,87,0.4);
+            letter-spacing: 1px;
+        }
+        .subtitle {
+            text-align: center;
+            color: #999;
+            font-size: 1.1em;
+            margin-bottom: 30px;
+            font-style: italic;
+        }
+        input, button {
+            width: 100%;
+            padding: 15px;
+            margin: 12px 0;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            font-size: 1.05em;
+            transition: all 0.3s ease;
+        }
+        input {
+            background: var(--input);
+            color: var(--text);
+            border: 1px solid #444;
+        }
+        input:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(255,71,87,0.2);
+        }
+        input::placeholder { color: #777; }
+        button {
+            background: linear-gradient(135deg, var(--accent), var(--accent-glow));
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 1.1em;
+            border: none;
+            position: relative;
+            overflow: hidden;
+        }
+        button::before {
+            content: '';
+            position: absolute;
+            top: 0; left: -100%;
+            width: 100%; height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: 0.5s;
+        }
+        button:hover::before { left: 100%; }
+        button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 20px rgba(255,71,87,0.4);
+        }
+        #result {
+            margin-top: 30px;
+            padding: 20px;
+            background: rgba(46,213,115,0.1);
+            border: 2px solid var(--success);
+            border-radius: 14px;
+            text-align: center;
+            font-size: 1.4em;
+            font-weight: bold;
+            display: none;
+            color: var(--success);
+            text-shadow: 0 0 10px rgba(46,213,115,0.3);
+        }
+        .confidence {
+            font-size: 0.9em;
+            color: #aaa;
+            margin-top: 8px;
+            font-weight: normal;
+        }
+        #video, #canvas {
+            width: 100%;
+            max-width: 420px;
+            margin: 15px auto;
+            display: block;
+            border-radius: 14px;
+            border: 2px solid var(--border);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+        #canvas { display: none; }
+        .or {
+            text-align: center;
+            color: var(--accent);
+            margin: 18px 0;
+            font-weight: bold;
+            font-size: 1.1em;
+        }
+        footer {
+            text-align: center;
+            margin-top: 50px;
+            color: #555;
+            font-size: 0.9em;
+        }
+        .glow { text-shadow: 0 0 10px var(--accent); }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="glow">Grace's Emotion Detector</h1>
+        <p class="subtitle">AI-powered real-time emotion recognition</p>
+        
+        <form id="form">
+            <input type="text" id="name" placeholder="Your Name" required>
+            <input type="file" id="file" accept="image/*">
+            <p class="or">OR</p>
+            <video id="video" autoplay playsinline></video>
+            <canvas id="canvas"></canvas>
+            <button type="button" id="capture">Capture Photo</button>
+            <button type="submit">Detect Emotion</button>
+        </form>
+        <div id="result">
+            <div id="emotion-text"></div>
+            <div class="confidence" id="confidence-text"></div>
+        </div>
+    </div>
+
+    <footer>
+        Made with <span style="color:var(--accent)">♥</span> by Grace | TensorFlow + Flask
+    </footer>
+
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const captureBtn = document.getElementById('capture');
+        const form = document.getElementById('form');
+        const result = document.getElementById('result');
+        const emotionText = document.getElementById('emotion-text');
+        const confidenceText = document.getElementById('confidence-text');
+    
+        let photoTaken = false;
+    
+
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then(stream => {
+                video.srcObject = stream;
+                video.style.display = 'block';
+            })
+            .catch(err => {
+                alert("Camera access denied. Please allow webcam.");
+            });
+    
+        captureBtn.onclick = () => {
+            if (!video.videoWidth) {
+                alert("Camera not ready!");
+                return;
+            }
+    
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            canvas.getContext('2d').drawImage(video, 0, 0);
+    
+            canvas.style.display = 'block';
+            video.style.display = 'none';
+    
+            const flash = document.createElement('div');
+            flash.style.position = 'fixed';
+            flash.style.top = 0; flash.style.left = 0;
+            flash.style.width = '100%'; flash.style.height = '100%';
+            flash.style.background = 'white';
+            flash.style.opacity = '0.8';
+            flash.style.pointerEvents = 'none';
+            flash.style.zIndex = '9999';
+            flash.style.transition = 'opacity 0.3s';
+            document.body.appendChild(flash);
+            setTimeout(() => {
+                flash.style.opacity = '0';
+                setTimeout(() => document.body.removeChild(flash), 300);
+            }, 100);
+    
+            captureBtn.textContent = 'Retake Photo';
+            captureBtn.style.background = '#ff6b6b';
+    
+            photoTaken = true;
+            document.getElementById('file').value = '';
+        };
+    
+        captureBtn.onclick = (e) => {
+            if (photoTaken) {
+                video.style.display = 'block';
+                canvas.style.display = 'none';
+                captureBtn.textContent = 'Capture Photo';
+                captureBtn.style.background = '';
+                photoTaken = false;
+                e.stopPropagation(); 
+            } else {
+                if (!video.videoWidth) {
+                    alert("Camera not ready!");
+                    return;
+                }
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                canvas.getContext('2d').drawImage(video, 0, 0);
+                canvas.style.display = 'block';
+                video.style.display = 'none';
+    
+                const flash = document.createElement('div');
+                flash.style.position = 'fixed';
+                flash.style.top = 0; flash.style.left = 0;
+                flash.style.width = '100%'; flash.style.height = '100%';
+                flash.style.background = 'white';
+                flash.style.opacity = '0.8';
+                flash.style.pointerEvents = 'none';
+                flash.style.zIndex = '9999';
+                flash.style.transition = 'opacity 0.3s';
+                document.body.appendChild(flash);
+                setTimeout(() => {
+                    flash.style.opacity = '0';
+                    setTimeout(() => document.body.removeChild(flash), 300);
+                }, 100);
+    
+                captureBtn.textContent = 'Retake Photo';
+                captureBtn.style.background = '#ff6b6b';
+                photoTaken = true;
+                document.getElementById('file').value = '';
+            }
+        };
+    
+        form.onsubmit = async (e) => {
+            e.preventDefault();
+    
+            if (!photoTaken && !document.getElementById('file').files[0]) {
+                alert("Please upload an image or capture a photo!");
+                return;
+            }
+    
+            const formData = new FormData();
+            formData.append('name', document.getElementById('name').value);
+    
+            const fileInput = document.getElementById('file');
+            if (fileInput.files[0]) {
+                formData.append('image', fileInput.files[0]);
+            } else {
+                formData.append('image_b64', canvas.toDataURL('image/jpeg'));
+            }
+    
+            result.style.display = 'none';
+            const res = await fetch('/predict', { method: 'POST', body: formData });
+            const data = await res.json();
+    
+            if (data.emotion) {
+                emotionText.innerHTML = `${data.emotion.toUpperCase()}`;
+                confidenceText.innerHTML = `Confidence: <strong>${data.confidence}</strong> (certainty)`;
+                result.style.display = 'block';
+            } else {
+                alert("Error: " + (data.error || "Try again!"));
+            }
+        };
+    </script>
+</body>
+</html>
